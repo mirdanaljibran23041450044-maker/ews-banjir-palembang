@@ -48,7 +48,7 @@ export interface ThresholdConfig {
 export interface User {
   nip: string;
   name: string;
-  role: "operator" | "public" | "super_admin" | "admin_ops";
+  role: "operator" | "public" | "super_admin" | "admin_ops" | "field_officer";
   avatar: string;
 }
 
