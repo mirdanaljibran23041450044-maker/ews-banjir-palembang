@@ -67,7 +67,7 @@ interface EwsContextProps {
   login: (nipOrEmail: string, role: "operator" | "public" | "super_admin") => Promise<boolean>;
   logout: () => void;
   updateConfig: (newConfig: Partial<ThresholdConfig>) => void;
-  addReport: (report: Omit<FieldReport, "id" | "timestamp">) => void;
+  addReport: (report: Omit<FieldReport, "id" | "timestamp">) => Promise<{success: boolean, message?: string}>;
   setSelectedSensor: (sensor: Sensor | null) => void;
   setActiveTab: (tab: "dashboard" | "map" | "sensors" | "config") => void;
   triggerMockUpdate: () => void;
@@ -539,33 +539,43 @@ export const EwsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ]);
   };
 
-  const addReport = async (newRep: Omit<FieldReport, "id" | "timestamp">) => {
-    const { data, error } = await supabase.from('reports').insert([{
-      sender_name: newRep.officerName,
-      location_desc: newRep.street,
-      description: newRep.description,
-      status: 'pending'
-    }]).select();
+  const addReport = async (newRep: Omit<FieldReport, "id" | "timestamp">): Promise<{success: boolean, message?: string}> => {
+    try {
+      const { data, error } = await supabase.from('reports').insert([{
+        sender_name: newRep.officerName,
+        location_desc: newRep.street,
+        description: newRep.description,
+        status: 'pending'
+      }]).select();
 
-    if (error) {
-      console.error("Supabase insert error:", error);
-      alert("Gagal menyimpan ke database: " + error.message);
-    }
+      if (error) {
+        console.error("Supabase insert error:", error);
+        return { success: false, message: error.message };
+      }
 
-    if (data && data[0]) {
-      const r = data[0];
-      const rep: FieldReport = {
-        id: r.id,
-        officerName: r.sender_name,
-        street: r.location_desc,
-        description: r.description,
-        status: "Belum Ditangani",
-        lat: 0,
-        lng: 0,
-        photoUrl: null,
-        timestamp: new Date(r.created_at).toLocaleString("id-ID")
-      };
-      setReports((prev) => [rep, ...prev]);
+      if (data && data[0]) {
+        const r = data[0];
+        const rep: FieldReport = {
+          id: r.id,
+          officerName: r.sender_name,
+          street: r.location_desc,
+          description: r.description,
+          status: "Belum Ditangani",
+          lat: 0,
+          lng: 0,
+          photoUrl: null,
+          timestamp: new Date(r.created_at).toLocaleString("id-ID")
+        };
+        setReports((prev) => {
+          if (prev.some(pr => pr.id === rep.id)) return prev;
+          return [rep, ...prev];
+        });
+        return { success: true };
+      }
+      return { success: false, message: "Data gagal dikembalikan oleh server." };
+    } catch (err: any) {
+      console.error("Exception in addReport:", err);
+      return { success: false, message: err.message || "Terjadi kesalahan sistem." };
     }
   };
 

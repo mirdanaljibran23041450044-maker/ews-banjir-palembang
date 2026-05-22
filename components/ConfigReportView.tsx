@@ -24,8 +24,17 @@ export const ConfigReportView: React.FC = () => {
   const [lng, setLng] = useState<number | "">("");
   const [gpsLoading, setGpsLoading] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ show: boolean, type: 'success' | 'error', message: string }>({ show: false, type: 'success', message: '' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const showToast = (type: 'success' | 'error', message: string) => {
+    setToast({ show: true, type, message });
+    setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }));
+    }, 5000);
+  };
 
   const handleThresholdSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,14 +91,15 @@ export const ConfigReportView: React.FC = () => {
     }
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!streetName || !desc || lat === "" || lng === "") {
-      alert("Harap lengkapi semua kolom formulir (termasuk koordinat GPS).");
+      showToast('error', "Harap lengkapi semua kolom formulir (termasuk koordinat GPS).");
       return;
     }
 
-    addReport({
+    setIsSubmitting(true);
+    const result = await addReport({
       officerName: user?.name || "Petugas Lapangan",
       street: streetName,
       description: desc,
@@ -98,15 +108,20 @@ export const ConfigReportView: React.FC = () => {
       lng: Number(lng),
       photoUrl: photoPreview,
     });
+    setIsSubmitting(false);
 
-    // Reset Form
-    setDesc("");
-    setStreetName("");
-    setLat("");
-    setLng("");
-    setPhotoPreview(null);
-    setStatus("Belum Ditangani");
-    alert("Laporan berhasil disubmit dan ditambahkan ke dashboard!");
+    if (result.success) {
+      // Reset Form
+      setDesc("");
+      setStreetName("");
+      setLat("");
+      setLng("");
+      setPhotoPreview(null);
+      setStatus("Belum Ditangani");
+      showToast('success', "Laporan berhasil disubmit dan ditambahkan ke dashboard!");
+    } else {
+      showToast('error', `Gagal mengirim laporan: ${result.message}`);
+    }
   };
 
   const handleToggleWa = () => {
@@ -118,8 +133,36 @@ export const ConfigReportView: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
       
+      {/* Toast Notification */}
+      <div className={`fixed top-4 right-4 z-50 transition-all duration-500 transform ${toast.show ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0 pointer-events-none'}`}>
+        <div className={`flex items-start gap-3 p-4 rounded-xl shadow-2xl max-w-sm border ${
+          toast.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-800' : 'bg-red-50 border-red-100 text-red-800'
+        }`}>
+          {toast.type === 'success' ? (
+            <div className="bg-emerald-100 p-1 rounded-full shrink-0">
+              <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          ) : (
+            <div className="bg-red-100 p-1 rounded-full shrink-0">
+              <svg className="w-5 h-5 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </div>
+          )}
+          <div>
+            <h4 className="text-sm font-bold">{toast.type === 'success' ? 'Berhasil' : 'Terjadi Kesalahan'}</h4>
+            <p className="text-xs font-medium mt-0.5 leading-relaxed">{toast.message}</p>
+            {toast.type === 'error' && (
+              <p className="text-[10px] text-red-600/70 mt-1">Cek koneksi, kebijakan database RLS (Row Level Security), atau hak akses Supabase.</p>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* 2-COLUMN GRID Layout (desktop side by side, mobile stacked) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
@@ -341,9 +384,21 @@ export const ConfigReportView: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full h-11 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 shadow-md shadow-slate-900/10 focus:outline-none transition-all cursor-pointer text-xs"
+              disabled={isSubmitting}
+              className={`w-full h-11 text-white font-bold rounded-xl shadow-md shadow-slate-900/10 focus:outline-none transition-all flex items-center justify-center gap-2 text-xs ${
+                isSubmitting ? 'bg-slate-700 cursor-not-allowed' : 'bg-slate-900 hover:bg-slate-800 cursor-pointer'
+              }`}
             >
-              Kirim Laporan Lapangan Petugas
+              {isSubmitting ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Mengirim...
+                </>
+              ) : (
+                'Kirim Laporan Lapangan Petugas'
+              )}
             </button>
           </form>
         </div>
