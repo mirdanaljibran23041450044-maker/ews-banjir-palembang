@@ -39,6 +39,7 @@ export interface NotificationLog {
 }
 
 export interface ThresholdConfig {
+  nodeId?: string;
   siaga: number; // cm
   darurat: number; // cm
   isWaEnabled: boolean;
