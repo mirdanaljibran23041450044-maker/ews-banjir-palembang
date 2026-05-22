@@ -15,7 +15,7 @@ export const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleLogin = async (e: React.FormEvent, role: "operator" | "public") => {
+  const handleLogin = async (e: React.FormEvent, role: "operator" | "public" | "super_admin") => {
     e.preventDefault();
     setError("");
     setLoading(true);
