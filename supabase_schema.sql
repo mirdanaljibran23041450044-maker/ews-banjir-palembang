@@ -65,3 +65,45 @@ insert into reports (sender_name, location_desc, description, status)
 values
   ('LAPOR! User', 'Simpang Polda', 'Genangan 30cm, macet total dari arah RS Siti Khadijah', 'pending'),
   ('Petugas Lapangan Budi', 'Jl. R. Sukamto', 'Saluran air tersumbat sampah plastik', 'dispatched');
+
+-- 6. Tabel Profiles (Manajemen Akun dan Role)
+create table profiles (
+  id uuid references auth.users on delete cascade primary key,
+  email text unique not null,
+  name text not null,
+  role text not null default 'operator', -- super_admin, operator, public
+  avatar_url text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- RLS Profiles
+alter table profiles enable row level security;
+
+create policy "Public profiles are viewable by everyone" on profiles
+  for select using (true);
+
+create policy "Users can insert their own profile" on profiles
+  for insert with check (auth.uid() = id);
+
+create policy "Users can update own profile" on profiles
+  for update using (auth.uid() = id);
+
+-- Trigger untuk membuat profil secara otomatis saat sign up
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, email, name, role, avatar_url)
+  values (
+    new.id,
+    new.email,
+    coalesce(new.raw_user_meta_data->>'full_name', new.email),
+    coalesce(new.raw_user_meta_data->>'role', 'operator'),
+    coalesce(new.raw_user_meta_data->>'avatar_url', 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=120&auto=format&fit=crop&q=80')
+  );
+  return new;
+end;
+$$ language plpgsql security definer;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();

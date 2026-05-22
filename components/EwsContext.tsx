@@ -64,8 +64,11 @@ interface EwsContextProps {
   activeTab: "dashboard" | "map" | "sensors" | "config";
   selectedSensor: Sensor | null;
   isLoggedIn: boolean;
-  login: (nipOrEmail: string, role: "operator" | "public" | "super_admin") => Promise<boolean>;
-  logout: () => void;
+  isGuest: boolean;
+  enterAsGuest: () => void;
+  login: (email: string, password: string) => Promise<{success: boolean, message?: string}>;
+  logout: () => Promise<void>;
+  signUp: (email: string, password: string, name: string, role: string) => Promise<{success: boolean, message?: string}>;
   updateConfig: (newConfig: Partial<ThresholdConfig>) => void;
   addReport: (report: Omit<FieldReport, "id" | "timestamp">) => Promise<{success: boolean, message?: string}>;
   setSelectedSensor: (sensor: Sensor | null) => void;
@@ -306,6 +309,36 @@ export const EwsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     fetchInitialData();
 
+    // Setup Auth Listener
+    const fetchUserProfile = async (userId: string) => {
+      const { data } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      if (data) {
+        setUser({
+          nip: data.email,
+          name: data.name,
+          role: data.role as any,
+          avatar: data.avatar_url || "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=120&auto=format&fit=crop&q=80",
+        });
+      }
+    };
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setIsLoggedIn(true);
+        fetchUserProfile(session.user.id);
+      }
+    });
+
+    const { data: { subscription: authSubscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        setIsLoggedIn(true);
+        fetchUserProfile(session.user.id);
+      } else {
+        setIsLoggedIn(false);
+        setUser(null);
+      }
+    });
+
     // Subscribe to real-time changes on the reports table
     const reportsSubscription = supabase
       .channel('public:reports')
@@ -344,6 +377,7 @@ export const EwsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return () => {
       supabase.removeChannel(reportsSubscription);
+      authSubscription.unsubscribe();
     };
   }, []);
   const [activeTab, setActiveTab] = useState<"dashboard" | "map" | "sensors" | "config">("dashboard");
@@ -351,6 +385,18 @@ export const EwsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   
   const [user, setUser] = useState<User | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
+
+  const enterAsGuest = () => {
+    setUser({
+      nip: "PUBLIK-GUEST",
+      name: "Pengunjung Umum",
+      role: "public",
+      avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80",
+    });
+    setIsLoggedIn(true);
+    setIsGuest(true);
+  };
 
   const [config, setConfig] = useState<ThresholdConfig>({
     siaga: 100, // cm
@@ -463,61 +509,43 @@ export const EwsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearInterval(interval);
   }, [sensors, config]);
 
-  const handleLogin = async (e: React.FormEvent, role: "operator" | "public" | "super_admin", nip: string, setLoading: (l: boolean) => void, setError: (s: string) => void) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
-    return new Promise<boolean>((resolve) => {
-      setTimeout(() => {
-        if (role === "operator" && !nip) {
-          setError("NIP atau Email Petugas wajib diisi.");
-          setLoading(false);
-          resolve(false);
-          return;
-        }
-        if (role === "operator") {
-          setUser({
-            nip: nip || "198804122010121003",
-            name: "Ir. H. Akhmad Bastari",
-            role: "operator",
-            avatar: "https://images.unsplash.com/photo-1560250097-0b93528c311a?w=120&auto=format&fit=crop&q=80",
-          });
-        } else if (role === "super_admin") {
-          setUser({
-            nip: "SUPERADMIN-DEM0",
-            name: "Super Admin Demo",
-            role: "super_admin",
-            avatar: "https://images.unsplash.com/photo-1502767089025-6572583495bf?w=120&auto=format&fit=crop&q=80",
-          });
-        } else {
-          setUser({
-            nip: "PUBLIK-GUEST",
-            name: "Pengunjung Umum",
-            role: "public",
-            avatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=120&auto=format&fit=crop&q=80",
-          });
-        }
-        setIsLoggedIn(true);
-        resolve(true);
-      }, 400);
-    });
+  // Real Supabase Auth Methods
+  const login = async (email: string, password: string): Promise<{success: boolean, message?: string}> => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) return { success: false, message: error.message };
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
   };
 
-  // Wrapper login function matching context signature
-  const login = async (nipOrEmail: string, role: "operator" | "public" | "super_admin"): Promise<boolean> => {
-    // Create a minimal fake event to satisfy handleLogin signature
-    const fakeEvent = { preventDefault: () => {} } as unknown as React.FormEvent;
-    // Dummy setters for loading and error (no UI feedback needed here)
-    const setLoading = (l: boolean) => {};
-    const setError = (s: string) => {};
-    // Forward to existing handleLogin implementation
-    const result = await handleLogin(fakeEvent, role, nipOrEmail, setLoading, setError);
-    return result;
+  const signUp = async (email: string, password: string, name: string, role: string): Promise<{success: boolean, message?: string}> => {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: name,
+            role: role
+          }
+        }
+      });
+      if (error) return { success: false, message: error.message };
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    if (!isGuest) {
+      await supabase.auth.signOut();
+    }
     setUser(null);
     setIsLoggedIn(false);
+    setIsGuest(false);
     setActiveTab("dashboard");
   };
 
@@ -641,8 +669,11 @@ export const EwsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         activeTab,
         selectedSensor,
         isLoggedIn,
-        login: login,
+        isGuest,
+        enterAsGuest,
+        login,
         logout,
+        signUp,
         updateConfig,
         addReport,
         setSelectedSensor,

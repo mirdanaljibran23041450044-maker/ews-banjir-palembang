@@ -3,37 +3,45 @@
 import React, { useState } from "react";
 import { useEws } from "./EwsContext";
 
-// Inline icons for simplicity if Lucide isn't installed. Let's provide SVG icons or check if we can install Lucide icons.
-// Wait, we can install lucide-react if needed, but we can write simple inline SVGs to guarantee zero dependency issues! Inline SVGs are extremely safe, lightweight and reliable. Let's write them cleanly.
-
 export const LoginPage: React.FC = () => {
-  const { login } = useEws();
-  const [nip, setNip] = useState("");
+  const { login, signUp, enterAsGuest } = useEws();
+  
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
-  const handleLogin = async (e: React.FormEvent, role: "operator" | "public" | "super_admin") => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccessMsg("");
     setLoading(true);
 
-    if (role === "operator" && !nip) {
-      setError("NIP atau Email Petugas wajib diisi.");
-      setLoading(false);
-      return;
-    }
-
     try {
-      let actualRole = role;
-      if (role === "operator" && nip === "SUPERADMIN-DEM0") {
-        actualRole = "super_admin";
-      }
-      const success = await login(nip, actualRole);
-      if (!success) {
-        setError("Gagal masuk. Periksa kembali NIP/Email dan Password Anda.");
+      if (isRegistering) {
+        if (!name) {
+          setError("Nama Petugas wajib diisi.");
+          setLoading(false);
+          return;
+        }
+        const res = await signUp(email, password, name, "operator");
+        if (!res.success) {
+          setError(res.message || "Gagal mendaftar");
+        } else {
+          setSuccessMsg("Pendaftaran berhasil! Akun telah dibuat. Anda sekarang bisa masuk.");
+          setIsRegistering(false);
+          setPassword(""); // reset password field for login
+        }
+      } else {
+        const res = await login(email, password);
+        if (!res.success) {
+          setError(res.message || "Gagal masuk. Periksa kembali Email dan Password Anda.");
+        }
       }
     } catch (err) {
       setError("Terjadi kesalahan sistem. Silakan coba lagi.");
@@ -69,12 +77,10 @@ export const LoginPage: React.FC = () => {
         {/* Winding River Musi Custom SVG & Contour Waves */}
         <div className="absolute inset-0 flex items-center justify-center z-0">
           <svg className="w-[120%] h-[80%] opacity-25" viewBox="0 0 1000 600" fill="none" xmlns="http://www.w3.org/2000/svg">
-            {/* Contour Lines */}
             <path d="M 0 100 Q 250 80 500 200 T 1000 150" stroke="#38bdf8" strokeWidth="1.5" strokeDasharray="5 5" />
             <path d="M 0 160 Q 250 140 500 260 T 1000 210" stroke="#38bdf8" strokeWidth="1" />
             <path d="M 0 220 Q 250 200 500 320 T 1000 270" stroke="#38bdf8" strokeWidth="1" />
             
-            {/* Sungai Musi Winding Path */}
             <path 
               d="M -50 300 C 150 280, 250 420, 450 400 C 650 380, 750 240, 1050 250" 
               stroke="#2563EB" 
@@ -82,7 +88,6 @@ export const LoginPage: React.FC = () => {
               strokeLinecap="round"
               className="opacity-70"
             />
-            {/* Inner flow line for aesthetics */}
             <path 
               d="M -50 300 C 150 280, 250 420, 450 400 C 650 380, 750 240, 1050 250" 
               stroke="#60a5fa" 
@@ -95,11 +100,9 @@ export const LoginPage: React.FC = () => {
             <path d="M 0 400 Q 250 380 500 500 T 1000 450" stroke="#38bdf8" strokeWidth="1" />
             <path d="M 0 460 Q 250 440 500 560 T 1000 510" stroke="#38bdf8" strokeWidth="1.5" strokeDasharray="10 5" />
 
-            {/* Simulated coordinates overlay text */}
             <text x="200" y="250" fill="#64748b" className="font-mono text-xs">SEBERANG ILIR</text>
             <text x="650" y="470" fill="#64748b" className="font-mono text-xs">SEBERANG ULU</text>
             
-            {/* Ampera Bridge representation */}
             <line x1="500" y1="280" x2="520" y2="440" stroke="#ef4444" strokeWidth="10" />
             <circle cx="505" cy="320" r="4" fill="#ffffff" />
             <circle cx="515" cy="400" r="4" fill="#ffffff" />
@@ -161,9 +164,26 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="space-y-2 text-center lg:text-left">
-            <h2 className="hidden lg:block text-2xl font-bold text-slate-900 tracking-tight">Selamat Datang Kembali</h2>
-            <p className="text-sm text-slate-500">Pilih akses masuk untuk memonitor titik banjir Kota Palembang</p>
+          <div className="space-y-2 text-center lg:text-left flex justify-between items-end">
+            <div>
+              <h2 className="hidden lg:block text-2xl font-bold text-slate-900 tracking-tight">
+                {isRegistering ? "Buat Akun Baru" : "Selamat Datang"}
+              </h2>
+              <p className="text-sm text-slate-500">
+                {isRegistering ? "Daftarkan akun petugas baru Anda" : "Silakan masuk dengan akun Anda"}
+              </p>
+            </div>
+            
+            <button
+              onClick={() => {
+                setIsRegistering(!isRegistering);
+                setError("");
+                setSuccessMsg("");
+              }}
+              className="text-xs font-bold text-blue-600 hover:underline"
+            >
+              {isRegistering ? "Batal (Kembali)" : "Daftar Akun"}
+            </button>
           </div>
 
           {error && (
@@ -180,26 +200,66 @@ export const LoginPage: React.FC = () => {
             </div>
           )}
 
+          {successMsg && (
+            <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-100 flex items-start gap-3 text-emerald-700 text-xs">
+              <span className="mt-0.5 text-emerald-500">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </span>
+              <div>
+                <p className="font-semibold">Berhasil!</p>
+                <p>{successMsg}</p>
+              </div>
+            </div>
+          )}
+
           {/* Form */}
-          <form className="space-y-5" onSubmit={(e) => handleLogin(e, "operator")}>
+          <form className="space-y-5" onSubmit={handleAuth}>
+            
+            {isRegistering && (
+              <div className="space-y-1.5">
+                <label htmlFor="name" className="block text-xs font-semibold text-slate-700">
+                  NAMA LENGKAP
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0zm6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <input
+                    id="name"
+                    name="name"
+                    type="text"
+                    required={isRegistering}
+                    placeholder="Contoh: Budi Santoso"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="block w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="space-y-1.5">
-              <label htmlFor="nip" className="block text-xs font-semibold text-slate-700">
-                NIP ATAU EMAIL PETUGAS
+              <label htmlFor="email" className="block text-xs font-semibold text-slate-700">
+                ALAMAT EMAIL PETUGAS
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
                   </svg>
                 </div>
                 <input
-                  id="nip"
-                  name="nip"
-                  type="text"
+                  id="email"
+                  name="email"
+                  type="email"
                   required
-                  placeholder="Contoh: 198804122010121003 atau email@pupr.go.id"
-                  value={nip}
-                  onChange={(e) => setNip(e.target.value)}
+                  placeholder="Contoh: petugas@palembang.go.id"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="block w-full pl-10 pr-4 py-3 border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white text-slate-900 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                 />
               </div>
@@ -244,21 +304,22 @@ export const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center justify-between text-xs font-medium">
-              <label className="flex items-center gap-2 text-slate-600 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
-                />
-                Ingat Saya
-              </label>
-              <div className="text-right">
-                <a href="#" className="text-blue-600 hover:underline block">Lupa Kata Sandi?</a>
-                <span className="text-[9px] text-slate-400">Gunakan NIP: <b className="text-slate-500 cursor-pointer" onClick={() => { setNip('SUPERADMIN-DEM0'); setPassword('admin123'); }}>SUPERADMIN-DEM0</b> untuk Admin</span>
+            {!isRegistering && (
+              <div className="flex items-center justify-between text-xs font-medium">
+                <label className="flex items-center gap-2 text-slate-600 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                  />
+                  Ingat Saya
+                </label>
+                <div className="text-right">
+                  <a href="#" className="text-blue-600 hover:underline block">Lupa Kata Sandi?</a>
+                </div>
               </div>
-            </div>
+            )}
 
             <button
               type="submit"
@@ -268,32 +329,36 @@ export const LoginPage: React.FC = () => {
               {loading ? (
                 <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
-                "Masuk Ke Sistem (Petugas)"
+                isRegistering ? "Daftar Akun Sekarang" : "Masuk Ke Sistem (Petugas)"
               )}
             </button>
           </form>
 
           {/* Separator */}
-          <div className="relative my-6 flex items-center">
-            <div className="flex-grow border-t border-slate-100"></div>
-            <span className="flex-shrink mx-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Atau Masuk Sebagai</span>
-            <div className="flex-grow border-t border-slate-100"></div>
-          </div>
+          {!isRegistering && (
+            <>
+              <div className="relative my-6 flex items-center">
+                <div className="flex-grow border-t border-slate-100"></div>
+                <span className="flex-shrink mx-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Atau Masuk Sebagai</span>
+                <div className="flex-grow border-t border-slate-100"></div>
+              </div>
 
-          {/* Public Access Link */}
-          <button
-            onClick={(e) => handleLogin(e, "public")}
-            className="w-full flex items-center justify-center gap-2.5 h-12 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl transition-all cursor-pointer text-sm"
-          >
-            <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
-            Lihat Sebagai Pengunjung Publik
-          </button>
+              {/* Public Access Link */}
+              <button
+                onClick={enterAsGuest}
+                className="w-full flex items-center justify-center gap-2.5 h-12 border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold rounded-xl transition-all cursor-pointer text-sm"
+              >
+                <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                Lihat Sebagai Pengunjung Publik
+              </button>
+            </>
+          )}
 
           {/* Disclaimer */}
-          <div className="text-center">
+          <div className="text-center mt-6">
             <p className="text-[10px] text-slate-400 leading-normal max-w-xs mx-auto">
               Sistem ini dilindungi hak cipta kedinasan. Penggunaan akses admin di luar wewenang Dinas PUPR Palembang melanggar hukum.
             </p>
