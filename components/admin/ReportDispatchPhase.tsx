@@ -1,12 +1,20 @@
 import React, { useState } from 'react';
+import { useEws } from '../EwsContext';
+import { useAdmin } from './AdminContext';
 
 export const ReportDispatchPhase: React.FC = () => {
-  const [activeReport, setActiveReport] = useState<number | null>(1);
+  const { reports, updateReportStatus } = useEws();
+  const { addAuditLog } = useAdmin();
+  const [activeReportId, setActiveReportId] = useState<string | number | null>(null);
 
-  const reports = [
-    { id: 1, location: 'Simpang Polda', time: '10:45', status: 'pending', desc: 'Genangan 30cm, macet total dari arah RS Siti Khadijah', sender: 'LAPOR! User' },
-    { id: 2, location: 'Jl. R. Sukamto', time: '09:30', status: 'dispatched', desc: 'Saluran air tersumbat sampah plastik', sender: 'Petugas Lapangan Budi' },
-  ];
+  const pendingReports = reports.filter(r => r.status === 'Belum Ditangani' || r.status === 'Sedang Dikerjakan');
+
+  const handleAction = async (status: 'resolved' | 'dispatched' | 'rejected') => {
+    if (!activeReportId) return;
+    await updateReportStatus(activeReportId, status);
+    addAuditLog({ timestamp: new Date().toISOString(), user: 'admin_ops', action: `Update report status to ${status}` });
+    setActiveReportId(null);
+  };
 
   return (
     <div className="p-6">
@@ -18,29 +26,29 @@ export const ReportDispatchPhase: React.FC = () => {
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 flex flex-col">
           <div className="p-4 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
             <h2 className="font-semibold text-slate-800">Antrean Laporan Masuk</h2>
-            <span className="bg-red-100 text-red-700 text-xs px-2 py-1 rounded-full font-bold">1 Baru</span>
+            <span className="bg-red-100 text-red-700 text-xs px-2 py-1 rounded-full font-bold">{pendingReports.length} Baru</span>
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-3">
-            {reports.map((rep) => (
+            {pendingReports.map((rep) => (
               <div 
                 key={rep.id} 
-                onClick={() => setActiveReport(rep.id)}
+                onClick={() => setActiveReportId(rep.id)}
                 className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                  activeReport === rep.id 
+                  activeReportId === rep.id 
                     ? 'border-blue-500 bg-blue-50' 
                     : 'border-slate-200 hover:border-blue-300'
                 }`}
               >
                 <div className="flex justify-between items-start mb-1">
-                  <div className="font-medium text-slate-800">{rep.location}</div>
-                  <div className="text-xs text-slate-500">{rep.time}</div>
+                  <div className="font-medium text-slate-800">{rep.street}</div>
+                  <div className="text-xs text-slate-500">{rep.timestamp.split(' ')[1] || rep.timestamp}</div>
                 </div>
-                <div className="text-xs text-slate-600 line-clamp-2 mb-2">{rep.desc}</div>
+                <div className="text-xs text-slate-600 line-clamp-2 mb-2">{rep.description}</div>
                 <div className="flex justify-between items-center">
-                  <div className="text-xs text-slate-400">Dari: {rep.sender}</div>
-                  {rep.status === 'pending' 
+                  <div className="text-xs text-slate-400">Dari: {rep.officerName}</div>
+                  {rep.status === 'Belum Ditangani' 
                     ? <span className="w-2 h-2 rounded-full bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.8)] animate-pulse"></span>
-                    : <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                    : <span className="w-2 h-2 rounded-full bg-blue-500"></span>
                   }
                 </div>
               </div>
@@ -75,14 +83,17 @@ export const ReportDispatchPhase: React.FC = () => {
           </div>
 
           {/* Action Panel for Active Report */}
-          {activeReport && (
+          {activeReportId && (() => {
+            const activeReport = pendingReports.find(r => r.id === activeReportId);
+            if (!activeReport) return null;
+            return (
             <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-5">
               <div className="flex justify-between items-start mb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-slate-800">{reports.find(r => r.id === activeReport)?.location}</h3>
-                  <p className="text-sm text-slate-500">Dilaporkan pada {reports.find(r => r.id === activeReport)?.time} oleh {reports.find(r => r.id === activeReport)?.sender}</p>
+                  <h3 className="text-lg font-bold text-slate-800">{activeReport.street}</h3>
+                  <p className="text-sm text-slate-500">Dilaporkan pada {activeReport.timestamp} oleh {activeReport.officerName}</p>
                 </div>
-                {reports.find(r => r.id === activeReport)?.status === 'pending' && (
+                {activeReport.status === 'Belum Ditangani' && (
                   <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded font-medium border border-yellow-200">
                     Menunggu Validasi
                   </span>
@@ -90,22 +101,22 @@ export const ReportDispatchPhase: React.FC = () => {
               </div>
               
               <div className="bg-slate-50 p-4 rounded border border-slate-100 mb-6">
-                <p className="text-slate-700">"{reports.find(r => r.id === activeReport)?.desc}"</p>
+                <p className="text-slate-700">"{activeReport.description}"</p>
               </div>
 
               <div className="flex flex-wrap gap-3">
-                <button className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded shadow-sm font-medium transition-colors">
+                <button onClick={() => handleAction('resolved')} className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded shadow-sm font-medium transition-colors">
                   ✓ Terima & Sebarkan ke Peta Publik
                 </button>
-                <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded shadow-sm font-medium transition-colors">
+                <button onClick={() => handleAction('dispatched')} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded shadow-sm font-medium transition-colors">
                   🛠 Kirim Disposisi Regu Teknis
                 </button>
-                <button className="bg-slate-100 hover:bg-slate-200 text-slate-600 py-2 px-4 rounded border border-slate-200 font-medium transition-colors">
+                <button onClick={() => handleAction('rejected')} className="bg-slate-100 hover:bg-slate-200 text-slate-600 py-2 px-4 rounded border border-slate-200 font-medium transition-colors">
                   Tolak (Spam)
                 </button>
               </div>
             </div>
-          )}
+          )})()}
         </div>
         
       </div>

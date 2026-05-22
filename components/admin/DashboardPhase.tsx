@@ -1,8 +1,13 @@
 import React from 'react';
 import { useAdmin } from './AdminContext';
+import { useEws } from '../EwsContext';
 
 export const DashboardPhase: React.FC = () => {
-  const { healthMetrics } = useAdmin();
+  const { healthMetrics, auditLogs } = useAdmin();
+  const { sensors, reports } = useEws();
+
+  const solarBatteryAvg = sensors.length > 0 ? sensors.reduce((acc, curr) => acc + curr.battery, 0) / sensors.length : 100;
+  const pendingReportsCount = reports.filter(r => r.status === 'Belum Ditangani' || r.status === 'Sedang Dikerjakan').length;
 
   return (
     <div className="p-6">
@@ -10,32 +15,32 @@ export const DashboardPhase: React.FC = () => {
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
-          <div className="text-sm text-slate-500 mb-1">Uptime Server & MQTT</div>
+          <div className="text-sm text-slate-500 mb-1">Total Titik Observasi</div>
           <div className="text-3xl font-bold text-slate-800">
-            {healthMetrics.uptime.toFixed(2)}%
+            {sensors.length}
           </div>
-          <div className={`text-sm mt-2 ${healthMetrics.uptime >= 99 ? 'text-green-500' : 'text-red-500'}`}>
-            Target &ge; 99%
+          <div className="text-sm mt-2 text-green-500">
+            Status Jaringan Online
           </div>
         </div>
 
         <div className="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
-          <div className="text-sm text-slate-500 mb-1">Konektivitas LoRaWAN / 4G</div>
+          <div className="text-sm text-slate-500 mb-1">Antrean Laporan Masuk</div>
           <div className="text-3xl font-bold text-slate-800">
-            {healthMetrics.lorawanConnected ? 'Online' : 'Offline'}
+            {pendingReportsCount}
           </div>
-          <div className={`text-sm mt-2 ${healthMetrics.lorawanConnected ? 'text-green-500' : 'text-red-500'}`}>
-            Status Jaringan
+          <div className={`text-sm mt-2 ${pendingReportsCount > 0 ? 'text-red-500' : 'text-green-500'}`}>
+            Perlu Tindakan
           </div>
         </div>
 
         <div className="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
           <div className="text-sm text-slate-500 mb-1">Daya Solar Panel (Rata-rata)</div>
           <div className="text-3xl font-bold text-slate-800">
-            {healthMetrics.solarBatteryAvg.toFixed(1)}%
+            {solarBatteryAvg.toFixed(1)}%
           </div>
-          <div className={`text-sm mt-2 ${healthMetrics.solarBatteryAvg < 20 ? 'text-red-500 font-bold' : 'text-green-500'}`}>
-            {healthMetrics.solarBatteryAvg < 20 ? 'Peringatan: Baterai Rendah' : 'Normal'}
+          <div className={`text-sm mt-2 ${solarBatteryAvg < 20 ? 'text-red-500 font-bold' : 'text-green-500'}`}>
+            {solarBatteryAvg < 20 ? 'Peringatan: Baterai Rendah' : 'Normal'}
           </div>
         </div>
 
@@ -51,16 +56,19 @@ export const DashboardPhase: React.FC = () => {
       </div>
       
       <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
-        <h2 className="text-lg font-semibold mb-4 text-slate-800">System Logs</h2>
+        <h2 className="text-lg font-semibold mb-4 text-slate-800">System Logs & Audit Trail</h2>
         <div className="bg-slate-900 text-green-400 p-4 rounded font-mono text-sm h-64 overflow-y-auto">
-          <div>[INFO] System initialized. Uptime tracking started.</div>
-          <div>[INFO] MQTT Broker listening on port 1883.</div>
-          <div>[INFO] Connect to PostGIS database successful.</div>
-          {healthMetrics.solarBatteryAvg < 20 && (
+          {auditLogs.slice(0, 10).map((log, i) => (
+            <div key={i}>[{new Date(log.timestamp).toLocaleTimeString()}] [{log.user}] {log.action}</div>
+          ))}
+          {auditLogs.length === 0 && (
+            <div>[INFO] System initialized. Waiting for actions...</div>
+          )}
+          {solarBatteryAvg < 20 && (
             <div className="text-red-400">[WARN] Low battery detected on some nodes.</div>
           )}
-          {healthMetrics.notificationQueue > 0 && (
-            <div className="text-yellow-400">[WARN] Notification queue has {healthMetrics.notificationQueue} messages.</div>
+          {pendingReportsCount > 0 && (
+            <div className="text-yellow-400">[WARN] Terdapat {pendingReportsCount} laporan yang belum ditangani.</div>
           )}
           <div className="animate-pulse">_</div>
         </div>

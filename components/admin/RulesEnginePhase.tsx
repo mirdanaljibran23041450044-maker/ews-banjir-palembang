@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useAdmin } from './AdminContext';
+import { useEws } from '../EwsContext';
 
 export const RulesEnginePhase: React.FC = () => {
   const { contacts, addContact, toggleContactActive, addAuditLog } = useAdmin();
+  const { sensors, updateSensorThresholds } = useEws();
   
   const [newContact, setNewContact] = useState({ name: '', phone: '', channel: 'WA' as 'WA' | 'SMS' });
 
@@ -14,11 +16,18 @@ export const RulesEnginePhase: React.FC = () => {
     }
   };
 
-  const stations = [
-    { id: '1', name: 'Simpang Polda', defaultSiaga: 100, defaultDarurat: 150 },
-    { id: '2', name: 'Kambang Iwak', defaultSiaga: 80, defaultDarurat: 120 },
-    { id: '3', name: 'Jl. Mayor Ruslan', defaultSiaga: 90, defaultDarurat: 130 },
-  ];
+  const handleUpdateThreshold = async (sensorId: string | number, name: string) => {
+    const siagaInput = document.getElementById(`siaga-${sensorId}`) as HTMLInputElement;
+    const daruratInput = document.getElementById(`darurat-${sensorId}`) as HTMLInputElement;
+    
+    const siaga = parseInt(siagaInput.value, 10);
+    const darurat = parseInt(daruratInput.value, 10);
+    
+    if (!isNaN(siaga) && !isNaN(darurat)) {
+      await updateSensorThresholds(sensorId, siaga, darurat);
+      addAuditLog({timestamp: new Date().toISOString(), user: 'admin_ops', action: `Update threshold ${name}`});
+    }
+  };
 
   return (
     <div className="p-6">
@@ -30,35 +39,35 @@ export const RulesEnginePhase: React.FC = () => {
             <h2 className="text-lg font-semibold text-slate-800">Threshold Customization (Rules Engine)</h2>
             <p className="text-xs text-slate-500 mt-1">Atur batas cm air untuk status Siaga dan Darurat berbeda per titik</p>
           </div>
-          <div className="p-4 space-y-4">
-            {stations.map(st => (
-              <div key={st.id} className="border border-slate-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
-                <div className="font-medium text-slate-800 mb-3">{st.name}</div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-amber-600 mb-1">Batas Siaga (cm)</label>
-                    <div className="flex">
-                      <input type="number" defaultValue={st.defaultSiaga} className="w-full border border-slate-300 rounded-l p-2 text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none" />
-                      <span className="bg-slate-100 border border-l-0 border-slate-300 rounded-r px-3 flex items-center text-sm text-slate-500">cm</span>
+            <div className="p-4 space-y-4">
+              {sensors.map(st => (
+                <div key={st.id} className="border border-slate-200 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                  <div className="font-medium text-slate-800 mb-3">{st.name}</div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-amber-600 mb-1">Batas Siaga (cm)</label>
+                      <div className="flex">
+                        <input id={`siaga-${st.id}`} type="number" defaultValue={st.siagaThreshold || 100} className="w-full border border-slate-300 rounded-l p-2 text-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 outline-none" />
+                        <span className="bg-slate-100 border border-l-0 border-slate-300 rounded-r px-3 flex items-center text-sm text-slate-500">cm</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-red-600 mb-1">Batas Darurat (cm)</label>
+                      <div className="flex">
+                        <input id={`darurat-${st.id}`} type="number" defaultValue={st.daruratThreshold || 150} className="w-full border border-slate-300 rounded-l p-2 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none" />
+                        <span className="bg-slate-100 border border-l-0 border-slate-300 rounded-r px-3 flex items-center text-sm text-slate-500">cm</span>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-medium text-red-600 mb-1">Batas Darurat (cm)</label>
-                    <div className="flex">
-                      <input type="number" defaultValue={st.defaultDarurat} className="w-full border border-slate-300 rounded-l p-2 text-sm focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none" />
-                      <span className="bg-slate-100 border border-l-0 border-slate-300 rounded-r px-3 flex items-center text-sm text-slate-500">cm</span>
-                    </div>
-                  </div>
+                  <button 
+                    onClick={() => handleUpdateThreshold(st.id, st.name)}
+                    className="mt-3 text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded transition-colors"
+                  >
+                    Simpan Aturan
+                  </button>
                 </div>
-                <button 
-                  onClick={() => addAuditLog({timestamp: new Date().toISOString(), user: 'admin_ops', action: `Update threshold ${st.name}`})}
-                  className="mt-3 text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1 rounded transition-colors"
-                >
-                  Simpan Aturan
-                </button>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-slate-200">

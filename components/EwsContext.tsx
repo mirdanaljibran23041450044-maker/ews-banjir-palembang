@@ -4,18 +4,20 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { supabase } from '../lib/supabaseClient';
 
 export interface Sensor {
-  id: string | number;
+  id: number | string;
   nodeId: string;
   name: string;
   street: string;
   kecamatan: string;
   issue: string;
-  waterLevel: number; // in cm
-  turbidity: number; // in NTU
-  battery: number; // in %
+  waterLevel: number;
+  turbidity: number;
+  battery: number;
   lat: number;
   lng: number;
   lastUpdated: string;
+  siagaThreshold?: number;
+  daruratThreshold?: number;
 }
 
 export interface FieldReport {
@@ -69,6 +71,9 @@ interface EwsContextProps {
   setSelectedSensor: (sensor: Sensor | null) => void;
   setActiveTab: (tab: "dashboard" | "map" | "sensors" | "config") => void;
   triggerMockUpdate: () => void;
+  addSensor: (name: string, lat: number, lng: number, problemType: string) => Promise<void>;
+  updateReportStatus: (reportId: string | number, newStatus: 'pending' | 'dispatched' | 'resolved' | 'rejected') => Promise<void>;
+  updateSensorThresholds: (sensorId: string | number, siaga: number, darurat: number) => Promise<void>;
 }
 
 const EwsContext = createContext<EwsContextProps | undefined>(undefined);
@@ -276,7 +281,9 @@ export const EwsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           battery: 100,
           lat: s.lat,
           lng: s.lng,
-          lastUpdated: new Date().toLocaleTimeString("id-ID")
+          lastUpdated: new Date().toLocaleTimeString("id-ID"),
+          siagaThreshold: s.siaga_threshold,
+          daruratThreshold: s.darurat_threshold
         }));
         setSensors(mappedSensors);
       }
@@ -502,26 +509,70 @@ export const EwsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (data && data[0]) {
       const r = data[0];
-      const newReportItem: FieldReport = {
-        ...newRep,
+      const rep: FieldReport = {
         id: r.id,
-        timestamp: new Date(r.created_at).toLocaleString("id-ID"),
+        officerName: r.sender_name,
+        street: r.location_desc,
+        description: r.description,
+        status: "Belum Ditangani",
+        lat: 0,
+        lng: 0,
+        photoUrl: null,
+        timestamp: new Date(r.created_at).toLocaleString("id-ID")
       };
-      setReports((prev) => [newReportItem, ...prev]);
+      setReports((prev) => [rep, ...prev]);
     }
+  };
 
-    // System log
-    const timeShort = new Date().toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    setNotifications(prev => [
-      {
-        id: `REPORT-${Date.now()}`,
-        timestamp: timeShort,
-        type: "INFO",
-        message: `Laporan baru diterima dari ${newRep.officerName} di ${newRep.street}.`,
-        channel: "System",
-      },
-      ...prev,
-    ]);
+  const addSensor = async (name: string, lat: number, lng: number, problemType: string) => {
+    const { data } = await supabase.from('sensors').insert([{
+      name,
+      lat,
+      lng,
+      problem_type: problemType,
+      siaga_threshold: 100,
+      darurat_threshold: 150
+    }]).select();
+
+    if (data && data[0]) {
+      const s = data[0];
+      const newSensor: Sensor = {
+        id: s.id,
+        nodeId: s.id,
+        name: s.name,
+        street: s.name,
+        kecamatan: "Palembang",
+        issue: s.problem_type,
+        waterLevel: 0,
+        turbidity: 0,
+        battery: 100,
+        lat: s.lat,
+        lng: s.lng,
+        lastUpdated: new Date().toLocaleTimeString("id-ID"),
+        siagaThreshold: s.siaga_threshold,
+        daruratThreshold: s.darurat_threshold
+      };
+      setSensors((prev) => [...prev, newSensor]);
+    }
+  };
+
+  const updateReportStatus = async (reportId: string | number, newStatus: 'pending' | 'dispatched' | 'resolved' | 'rejected') => {
+    await supabase.from('reports').update({ status: newStatus }).eq('id', reportId);
+    
+    setReports((prev) => prev.map((r) => {
+      if (r.id === reportId) {
+        let displayStatus: "Sedang Dikerjakan" | "Selesai" | "Belum Ditangani" = "Belum Ditangani";
+        if (newStatus === 'dispatched') displayStatus = "Sedang Dikerjakan";
+        if (newStatus === 'resolved') displayStatus = "Selesai";
+        return { ...r, status: displayStatus };
+      }
+      return r;
+    }));
+  };
+
+  const updateSensorThresholds = async (sensorId: string | number, siaga: number, darurat: number) => {
+    await supabase.from('sensors').update({ siaga_threshold: siaga, darurat_threshold: darurat }).eq('id', sensorId);
+    setSensors((prev) => prev.map((s) => s.id === sensorId ? { ...s, siagaThreshold: siaga, daruratThreshold: darurat } : s));
   };
 
   return (
@@ -542,6 +593,9 @@ export const EwsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSelectedSensor,
         setActiveTab,
         triggerMockUpdate,
+        addSensor,
+        updateReportStatus,
+        updateSensorThresholds,
       }}
     >
       {children}
