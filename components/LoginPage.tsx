@@ -27,7 +27,11 @@ export const LoginPage: React.FC = () => {
     }
 
     try {
-      const success = await login(nip, role);
+      let actualRole = role;
+      if (role === "operator" && nip === "SUPERADMIN-DEM0") {
+        actualRole = "super_admin";
+      }
+      const success = await login(nip, actualRole);
       if (!success) {
         setError("Gagal masuk. Periksa kembali NIP/Email dan Password Anda.");
       }
@@ -250,7 +254,10 @@ export const LoginPage: React.FC = () => {
                 />
                 Ingat Saya
               </label>
-              <a href="#" className="text-blue-600 hover:underline">Lupa Kata Sandi?</a>
+              <div className="text-right">
+                <a href="#" className="text-blue-600 hover:underline block">Lupa Kata Sandi?</a>
+                <span className="text-[9px] text-slate-400">Gunakan NIP: <b className="text-slate-500 cursor-pointer" onClick={() => { setNip('SUPERADMIN-DEM0'); setPassword('admin123'); }}>SUPERADMIN-DEM0</b> untuk Admin</span>
+              </div>
             </div>
 
             <button

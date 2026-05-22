@@ -305,6 +305,46 @@ export const EwsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
     fetchInitialData();
+
+    // Subscribe to real-time changes on the reports table
+    const reportsSubscription = supabase
+      .channel('public:reports')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reports' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const r = payload.new;
+          const newRep: FieldReport = {
+            id: r.id,
+            officerName: r.sender_name,
+            street: r.location_desc,
+            description: r.description,
+            status: r.status === 'dispatched' ? "Sedang Dikerjakan" : r.status === 'resolved' ? "Selesai" : "Belum Ditangani",
+            lat: 0,
+            lng: 0,
+            photoUrl: null,
+            timestamp: new Date(r.created_at).toLocaleString("id-ID")
+          };
+          setReports((prev) => {
+            if (prev.some(pr => pr.id === newRep.id)) return prev;
+            return [newRep, ...prev];
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          const r = payload.new;
+          setReports((prev) => prev.map(rep => {
+            if (rep.id === r.id) {
+              return {
+                ...rep,
+                status: r.status === 'dispatched' ? "Sedang Dikerjakan" : r.status === 'resolved' ? "Selesai" : "Belum Ditangani",
+              };
+            }
+            return rep;
+          }));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(reportsSubscription);
+    };
   }, []);
   const [activeTab, setActiveTab] = useState<"dashboard" | "map" | "sensors" | "config">("dashboard");
   const [selectedSensor, setSelectedSensor] = useState<Sensor | null>(null);
@@ -506,6 +546,11 @@ export const EwsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       description: newRep.description,
       status: 'pending'
     }]).select();
+
+    if (error) {
+      console.error("Supabase insert error:", error);
+      alert("Gagal menyimpan ke database: " + error.message);
+    }
 
     if (data && data[0]) {
       const r = data[0];
